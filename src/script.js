@@ -39,13 +39,6 @@ const playHitSound = (event) => {
  */
 const cubeTextureLoader = new THREE.CubeTextureLoader();
 
-px.png;
-nx.png;
-py.png;
-ny.png;
-pz.png;
-nz.png;
-
 const environmentMapTexture = cubeTextureLoader.load([
   process.env.NODE_ENV === "development"
     ? "/textures/environmentMaps/0/px.png"
