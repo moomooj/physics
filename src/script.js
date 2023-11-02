@@ -6,11 +6,6 @@ import CANNON from "cannon";
 THREE.ColorManagement.enabled = false;
 
 /**
- * Debug
- */
-const gui = new dat.GUI();
-
-/**
  * Base
  */
 // Canvas
@@ -18,6 +13,21 @@ const canvas = document.querySelector("canvas.webgl");
 
 // Scene
 const scene = new THREE.Scene();
+
+/**
+ * Sounds
+ */
+const hitSound = new Audio("/sounds/hit.mp3");
+
+const playHitSound = (event) => {
+  const impactStrength = event.contact.getImpactVelocityAlongNormal();
+
+  if (impactStrength > 1.5) {
+    hitSound.volume = Math.random();
+    hitSound.currentTime = 0;
+    hitSound.play();
+  }
+};
 
 /**
  * Textures
@@ -36,6 +46,8 @@ const environmentMapTexture = cubeTextureLoader.load([
 
 //Physics
 const world = new CANNON.World(); //보이지 않는 물리학 Scene 이라고 생각하세요.
+world.broadphase = new CANNON.SAPBroadphase(world);
+world.allowSleep = true;
 world.gravity.set(0, -9.82, 0); //vec3(xyz) (vector3랑 다르지만 거의 똑같이 작동함)
 
 // Physics Materials
@@ -52,22 +64,6 @@ const defaultContactMaterial = new CANNON.ContactMaterial(
 world.addContactMaterial(defaultContactMaterial);
 world.defaultContactMaterial = defaultContactMaterial;
 
-//Physic Sphere
-const sphereShape = new CANNON.Sphere(0.5); // body에 들어갈 Geometry라고 생각하면 편합니다.
-const sphereBody = new CANNON.Body({
-  // body에 들어갈 mesh라고 생각하면 편합니다.
-  mass: 1, //질량 (만약 질량이 큰 도형과 작은 도형이 만나면 큰 도형이 밀어내기 때문에)
-  position: new CANNON.Vec3(0, 3, 0), // 위치  vec3(xyz) (vector3랑 다르지만 거의 똑같이 작동함)
-  shape: sphereShape, // 모향
-});
-
-sphereBody.applyLocalForce(
-  new CANNON.Vec3(150, 0, 0),
-  new CANNON.Vec3(0, 0, 0)
-);
-
-world.addBody(sphereBody); //보이지 않는 물리학  Scene에 넣기
-
 //Physic Floor
 const floorShape = new CANNON.Plane();
 const floorBody = new CANNON.Body({
@@ -76,22 +72,6 @@ const floorBody = new CANNON.Body({
 });
 floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(-1, 0, 0), Math.PI * 0.5);
 world.addBody(floorBody);
-
-/**
- * Test sphere
- */
-const sphere = new THREE.Mesh(
-  new THREE.SphereGeometry(0.5, 32, 32),
-  new THREE.MeshStandardMaterial({
-    metalness: 0.3,
-    roughness: 0.4,
-    envMap: environmentMapTexture,
-    envMapIntensity: 0.5,
-  })
-);
-sphere.castShadow = true;
-sphere.position.y = 0.5;
-scene.add(sphere);
 
 /**
  * Floor
@@ -178,6 +158,80 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.setSize(sizes.width, sizes.height);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
+// utils
+const objectsToUpdate = [];
+
+const sphereGeometry = new THREE.SphereGeometry(1, 20, 20);
+const meshStandardMaterial = new THREE.MeshStandardMaterial({
+  metalness: 0.3,
+  roughness: 0.4,
+  envMap: environmentMapTexture,
+});
+
+const createSphere = (radius, position) => {
+  const mesh = new THREE.Mesh(sphereGeometry, meshStandardMaterial);
+  mesh.scale.set(radius, radius, radius);
+  mesh.castShadow = true;
+  mesh.position.copy(position);
+  scene.add(mesh);
+
+  // Canon.js body
+  const shape = new CANNON.Sphere(radius);
+  const body = new CANNON.Body({
+    mass: 1,
+    position: new CANNON.Vec3(0, 3, 0),
+    shape,
+  });
+  body.position.copy(position);
+  body.addEventListener("collide", playHitSound);
+
+  world.addBody(body);
+
+  // save in objects to update
+  objectsToUpdate.push({ mesh, body });
+};
+
+// Create box
+const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
+const boxMaterial = new THREE.MeshStandardMaterial({
+  metalness: 0.3,
+  roughness: 0.4,
+  envMap: environmentMapTexture,
+  envMapIntensity: 0.5,
+});
+
+const createBox = (width, height, depth, position) => {
+  // Three.js mesh
+  const mesh = new THREE.Mesh(boxGeometry, boxMaterial);
+  mesh.scale.set(width, height, depth);
+  mesh.castShadow = true;
+  mesh.position.copy(position);
+  scene.add(mesh);
+
+  // Cannon.js body
+  const shape = new CANNON.Box(
+    new CANNON.Vec3(width * 0.5, height * 0.5, depth * 0.5)
+  );
+
+  const body = new CANNON.Body({
+    mass: 1,
+    position: new CANNON.Vec3(0, 3, 0),
+    shape,
+    material: defaultMaterial,
+  });
+  body.position.copy(position);
+
+  body.addEventListener("collide", playHitSound);
+  world.addBody(body);
+
+  // Save in objects
+  objectsToUpdate.push({ mesh, body });
+};
+
+createBox(1, 1.5, 2, { x: 0, y: 3, z: 0 });
+
+//보이지 않는 물리학  Scene에 넣기
+
 /**
  * Animate
  */
@@ -189,12 +243,13 @@ const tick = () => {
   const deltaTime = elapsedTime - oldElapsedTime; // 한 프레임이 완료까지 걸리는 시간
   oldElapsedTime = elapsedTime;
 
-  sphereBody.applyForce(new CANNON.Vec3(-0.5, 0, 0), sphereBody.position);
-
   //물리학 업데이트
   world.step(1 / 60, deltaTime, 3);
 
-  sphere.position.copy(sphereBody.position);
+  for (const object of objectsToUpdate) {
+    object.mesh.position.copy(object.body.position);
+    object.mesh.quaternion.copy(object.body.quaternion);
+  }
 
   // Update controls
   controls.update();
@@ -207,3 +262,42 @@ const tick = () => {
 };
 
 tick();
+
+/**
+ * Debug
+ */
+const gui = new dat.GUI();
+
+const debugObject = {};
+
+debugObject.createSphere = () => {
+  createSphere(Math.random() * 0.5, {
+    x: (Math.random() - 0.5) * 3,
+    y: 3,
+    z: (Math.random() - 0.5) * 3,
+  });
+};
+
+gui.add(debugObject, "createSphere");
+
+debugObject.createBox = () => {
+  createBox(Math.random(), Math.random(), Math.random(), {
+    x: (Math.random() - 0.5) * 3,
+    y: 3,
+    z: (Math.random() - 0.5) * 3,
+  });
+};
+gui.add(debugObject, "createBox");
+
+debugObject.reset = () => {
+  for (const object of objectsToUpdate) {
+    // Remove body
+    object.body.removeEventListener("collide", playHitSound);
+    world.removeBody(object.body);
+
+    // Remove mesh
+    scene.remove(object.mesh);
+  }
+  objectsToUpdate.splice(0, objectsToUpdate.length);
+};
+gui.add(debugObject, "reset");
