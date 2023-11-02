@@ -17,7 +17,12 @@ const scene = new THREE.Scene();
 /**
  * Sounds
  */
-const hitSound = new Audio("/sounds/hit.mp3");
+
+const hitSound = new Audio(
+  process.env.NODE_ENV === "development"
+    ? "/sounds/hit.mp3"
+    : "/physics/sounds/hit.mp3"
+);
 
 const playHitSound = (event) => {
   const impactStrength = event.contact.getImpactVelocityAlongNormal();
@@ -32,16 +37,34 @@ const playHitSound = (event) => {
 /**
  * Textures
  */
-const textureLoader = new THREE.TextureLoader();
 const cubeTextureLoader = new THREE.CubeTextureLoader();
 
+px.png;
+nx.png;
+py.png;
+ny.png;
+pz.png;
+nz.png;
+
 const environmentMapTexture = cubeTextureLoader.load([
-  "/textures/environmentMaps/0/px.png",
-  "/textures/environmentMaps/0/nx.png",
-  "/textures/environmentMaps/0/py.png",
-  "/textures/environmentMaps/0/ny.png",
-  "/textures/environmentMaps/0/pz.png",
-  "/textures/environmentMaps/0/nz.png",
+  process.env.NODE_ENV === "development"
+    ? "/textures/environmentMaps/0/px.png"
+    : "/physics/textures/environmentMaps/0/px.png;",
+  process.env.NODE_ENV === "development"
+    ? "/textures/environmentMaps/0/px.png"
+    : "/physics/textures/environmentMaps/0/nx.png;",
+  process.env.NODE_ENV === "development"
+    ? "/textures/environmentMaps/0/px.png"
+    : "/physics/textures/environmentMaps/0/py.png;",
+  process.env.NODE_ENV === "development"
+    ? "/textures/environmentMaps/0/px.png"
+    : "/physics/textures/environmentMaps/0/ny.png;",
+  process.env.NODE_ENV === "development"
+    ? "/textures/environmentMaps/0/px.png"
+    : "/physics/textures/environmentMaps/0/pz.png;",
+  process.env.NODE_ENV === "development"
+    ? "/textures/environmentMaps/0/px.png"
+    : "/physics/textures/environmentMaps/0/nz.png;",
 ]);
 
 //Physics
